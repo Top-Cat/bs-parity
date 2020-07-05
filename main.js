@@ -39,84 +39,41 @@ const cuts = {
     }
 };
 
-class Parity {
-    constructor() {
+function Parity() {
         this.red = 'forehand';
         this.blue = 'forehand';
+}
+
+Parity.prototype.invert = function(color) {
+    this[color] === 'forehand' ? this[color] = 'backhand' : this[color] = 'forehand';
+}
+
+Parity.prototype.init = function(notes) {
+    let firstRed;
+    let firstBlue;
+    for (let note of notes) {
+        if (!(firstRed) && types[note._type] === 'red') {
+            firstRed = note;
+        } else if (!(firstBlue) && types[note._type] === 'blue') {
+            firstBlue = note;
+        }
     }
 
-    invert(color) {
-        this[color] === 'forehand' ? this[color] = 'backhand' : this[color] = 'forehand';
+    if (firstRed && cuts.red.good.forehand.includes(cutDirections[firstRed._cutDirection])) {
+        this.red = 'forehand';
+    } else {
+        this.red = 'backhand';
     }
 
-    init(notes) {
-        let firstRed;
-        let firstBlue;
-        for (let note of notes) {
-            if (!(firstRed) && types[note._type] === 'red') {
-                firstRed = note;
-            } else if (!(firstBlue) && types[note._type] === 'blue') {
-                firstBlue = note;
-            }
-        }
-
-        if (firstRed && cuts.red.good.forehand.includes(cutDirections[firstRed._cutDirection])) {
-            this.red = 'forehand';
-        } else {
-            this.red = 'backhand';
-        }
-
-        if (firstBlue && cuts.blue.good.forehand.includes(cutDirections[firstBlue._cutDirection])) {
-            this.blue = 'forehand';
-        } else {
-            this.blue = 'backhand';
-        }
+    if (firstBlue && cuts.blue.good.forehand.includes(cutDirections[firstBlue._cutDirection])) {
+        this.blue = 'forehand';
+    } else {
+        this.blue = 'backhand';
     }
 }
 
 var difficultyString;
-var sliderPrecision = Infinity;
 var ready = false;
-
-const fileInput = document.getElementById('file-input');
-const sliderPrecisionInput = document.getElementById('slider-precision');
-const submit = document.getElementById('submit');
-const output = document.getElementById('output');
-
-fileInput.addEventListener('change', readFile);
-sliderPrecisionInput.addEventListener('change', readSliderPrecision);
-submit.addEventListener('click', main);
-
-function readFile() {
-    ready = false;
-    let fr = new FileReader();
-    fr.readAsText(fileInput.files[0]);
-    fr.addEventListener('load', function () {
-        difficultyString = fr.result;
-        ready = true;
-    });
-}
-
-function readSliderPrecision() {
-    sliderPrecision = parseInt(sliderPrecisionInput.value) || Infinity;
-}
-
-function getDifficultyObject() {
-    return JSON.parse(difficultyString);
-}
-
-function getNotes(obj) {
-    let notes = obj._notes;
-    notes.sort(function (a, b) {
-        return a._time - b._time;
-    })
-
-    // filter out invalid note types
-    notes = notes.filter(function (note) {
-        return types[note._type] !== undefined;
-    });
-    return notes;
-}
 
 function logNote(note, parity) {
     let time = note._time;
@@ -133,12 +90,7 @@ function logNote(note, parity) {
 }
 
 function outputMessage(text, type) {
-    let element = document.createElement('div');
-    let textNode = document.createElement('pre');
-    textNode.innerHTML = text;
-    element.classList.add('outline', type);
-    element.appendChild(textNode);
-    output.appendChild(element);
+    log("[GMParity] [" + type + "]" + text);
 }
 
 function clearOutput() {
@@ -147,14 +99,8 @@ function clearOutput() {
     }
 }
 
-function main() {
-    clearOutput();
-    if (!ready) {
-        outputMessage('File loading not ready, try again', 'error');
-        return;
-    }
-
-    let notes = getNotes(getDifficultyObject());
+function performCheck(data, sliderPrecision) {
+    notes = data.notes;
 
     let parity = new Parity();
     parity.init(notes);
@@ -222,10 +168,12 @@ function main() {
             if (cuts[type].good[parity[type]].includes(cutDirection)) {
                 parity.invert(type);
             } else if (cuts[type].borderline[parity[type]].includes(cutDirection)) {
+                addWarning(note, "Borderline hit, not all players might read or be able to play this correctly");
                 outputMessage(logNote(note, parity) +
                     '\nBorderline hit, not all players might read or be able to play this correctly', 'warning');
                 parity.invert(type);
             } else {
+                addError(note, "Bad hit, wrist reset is necessary");
                 outputMessage(logNote(note, parity) + '\nBad hit, wrist reset is necessary', 'error');
             }
 
@@ -243,8 +191,10 @@ function main() {
             }
         }
     }
-
-    if (document.getElementsByClassName('warning').length === 0 && document.getElementsByClassName('error').length === 0) {
-        outputMessage('No errors found', 'success');
-    }
 }
+
+module.exports = {
+    name: "GM Parity Checker",
+    params: {"Sliders 1/": 128},
+    performCheck: performCheck
+};
